@@ -4,15 +4,15 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 import time
 
-# 🧩 LinkedIn login details
-EMAIL = "your_email@example.com"
-PASSWORD = "your_password"
+
+EMAIL = "dilkhushghunawat86@gmail.com"
+PASSWORD = "unnati@8690"
 
 # 🧾 File jisme aapke codes hain (har line me ek code)
 CODE_FILE = "word.txt"
 
 # 📁 Output file jahan result save hoga
-OUTPUT_FILE = "linkedin_offer_status.txt"
+OUTPUT_FILE = "offer_status.txt"
 
 # 🧰 Chrome setup
 options = Options()

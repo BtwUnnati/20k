@@ -1,102 +1,65 @@
-import requests
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
 import time
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# ===============================
-# CONFIG
-# ===============================
-COOKIES_FILE = "cookies.txt"       # li_at cookie
-WORDS_FILE = "word.txt"            # codes list
-VALID_OUTPUT = "valid_codes.txt"   # valid results
-THREADS = 4                        # safe parallel threads
-TIMEOUT = 12                       # request timeout
-# ===============================
+# 🧩 LinkedIn login details
+EMAIL = "your_email@example.com"
+PASSWORD = "your_password"
 
+# 🧾 File jisme aapke codes hain (har line me ek code)
+CODE_FILE = "word.txt"
 
-def load_cookie():
-    if not os.path.exists(COOKIES_FILE):
-        raise SystemExit(f"❌ Cookie file not found: {COOKIES_FILE}")
+# 📁 Output file jahan result save hoga
+OUTPUT_FILE = "linkedin_offer_status.txt"
 
-    cookie = open(COOKIES_FILE, "r", encoding="utf-8").read().strip()
-    if not cookie:
-        raise SystemExit("❌ cookies.txt is empty!")
-    return cookie
+# 🧰 Chrome setup
+options = Options()
+options.add_argument("--start-maximized")
+driver = webdriver.Chrome(options=options)
 
+def login_linkedin():
+    driver.get("https://www.linkedin.com/login")
+    time.sleep(3)
 
-def create_session(li_at_cookie):
-    s = requests.Session()
-    s.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-    })
-    s.cookies.set("li_at", li_at_cookie, domain=".linkedin.com")
-    return s
+    driver.find_element(By.ID, "username").send_keys(EMAIL)
+    driver.find_element(By.ID, "password").send_keys(PASSWORD)
+    driver.find_element(By.ID, "password").send_keys(Keys.ENTER)
+    time.sleep(5)
+    print("✅ Logged in successfully!")
 
+def read_codes():
+    with open(CODE_FILE, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
 
-def check_code(session, code):
-    url = "https://www.linkedin.com/premium/redeem/gift"
-    params = {"_ed": code}
+def check_offer(code):
+    url = f"https://www.linkedin.com/premium/redeem/gift?_ed={code}"
+    driver.get(url)
+    time.sleep(5)  # Wait for the page to load
 
-    try:
-        r = session.get(url, params=params, timeout=TIMEOUT)
-        text = r.text.lower()
-    except Exception as e:
-        return code, "error"
+    page_text = driver.page_source.lower()
 
-    # ----- Detection Logic -----
-    if "already been redeemed" in text:
-        return code, "used"
+    if "offer active" in page_text or "claim offer" in page_text:
+        status = "ACTIVE"
+    elif "already claimed" in page_text or "invalid" in page_text:
+        status = "INVALID/CLAIMED"
+    else:
+        status = "UNKNOWN"
 
-    if "offer unavailable" in text:
-        return code, "invalid"
+    print(f"{code} → {status}")
 
-    if "claim" in text or "activate" in text or "redeem" in text:
-        return code, "valid"
+    with open(OUTPUT_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{code}: {status}\n")
 
-    return code, "unknown"
+# 🚀 Main process
+login_linkedin()
+codes = read_codes()
 
+print(f"🔍 {len(codes)} codes mil gaye, checking start ho rahi hai...\n")
 
-def main():
-    li_at_cookie = load_cookie()
-    session = create_session(li_at_cookie)
+for code in codes:
+    check_offer(code)
 
-    if not os.path.exists(WORDS_FILE):
-        raise SystemExit(f"❌ Code file not found: {WORDS_FILE}")
-
-    codes = [x.strip() for x in open(WORDS_FILE, "r", encoding="utf-8") if x.strip()]
-    print(f"\n🔥 TOTAL CODES LOADED: {len(codes)}\n")
-
-    valid_found = 0
-
-    print("⚡ Checking codes fast with multi-threads...\n")
-
-    with ThreadPoolExecutor(max_workers=THREADS) as executor:
-        tasks = {executor.submit(check_code, session, code): code for code in codes}
-
-        for future in as_completed(tasks):
-            code, result = future.result()
-
-            if result == "valid":
-                valid_found += 1
-                print(f"🎉 OFFER ACTIVE → {code}")
-
-                with open(VALID_OUTPUT, "a", encoding="utf-8") as f:
-                    f.write(code + "\n")
-
-            elif result == "invalid":
-                print(f"❌ INVALID → {code}")
-
-            elif result == "used":
-                print(f"⚠ USED → {code}")
-
-            else:
-                print(f"❓ UNKNOWN → {code}")
-
-    print("\n=============================")
-    print(f"✔ TOTAL VALID OFFERS FOUND: {valid_found}")
-    print(f"📁 SAVED IN: {VALID_OUTPUT}")
-    print("=============================\n")
-
-
-if __name__ == "__main__":
-    main()
+driver.quit()
+print(f"\n✅ Sab codes check ho gaye! Result '{OUTPUT_FILE}' me save ho gaya.")
